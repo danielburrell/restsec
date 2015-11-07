@@ -2,9 +2,7 @@ package uk.co.solong.restsec.core.annotations;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import javax.naming.NoPermissionException;
 import javax.servlet.http.HttpServletRequest;
@@ -20,8 +18,12 @@ import org.springframework.stereotype.Component;
 
 import uk.co.solong.restsec.core.exceptions.CannotVerifyAuthenticationException;
 import uk.co.solong.restsec.core.exceptions.NotAuthenticatedException;
-import uk.co.solong.restsec.core.roles.Role;
+import uk.co.solong.restsec.core.loader.AbstractRestSecLoader;
 import uk.co.solong.restsec.core.sessions.SessionManager;
+
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 
 @Aspect
 @Component
@@ -30,17 +32,19 @@ public class EntitlementAspect {
     private static final Logger logger = LoggerFactory.getLogger(EntitlementAspect.class);
 
     private final SessionManager sessionManager;
-    private final Map<String,List<String>> entitlementDirectory;
-    @Around("execution(* *(..)) && @annotation(uk.co.solong.hatf2.web.annotations.Entitlement)")
+    private final LoadingCache<String, List<String>> entitlementDirectory;
+
+    @Around("execution(* *(..)) && @annotation(uk.co.solong.restsec.core.annotations.Entitlement)")
     public Object around(ProceedingJoinPoint point) throws Throwable {
         Object[] args = point.getArgs();
-        for (Object arg:args){
-            if (arg instanceof HttpServletRequest){
-                HttpServletRequest request = (HttpServletRequest)arg;
-                if (sessionManager.isLoggedIn(request)){
+        for (Object arg : args) {
+            if (arg instanceof HttpServletRequest) {
+                HttpServletRequest request = (HttpServletRequest) arg;
+                if (sessionManager.isLoggedIn(request)) {
                     String userId = sessionManager.getUserId(request);
                     if (userId == null) {
-                        //if the userid is null (shouldnt ever hit this) make them login again
+                        // if the userid is null (shouldnt ever hit this) make
+                        // them login again
                         throw new NotAuthenticatedException();
                     }
                     List<String> givenRoles = entitlementDirectory.get(userId);
@@ -54,18 +58,19 @@ public class EntitlementAspect {
                         throw new NoPermissionException();
                     }
                 } else {
-                    //user is not logged in
+                    // user is not logged in
                     throw new NotAuthenticatedException();
                 }
             }
         }
-        //this exception is thrown if there is no httpservletrequest parameter to perform entitlement checks on
+        // this exception is thrown if there is no httpservletrequest parameter
+        // to perform entitlement checks on
         throw new CannotVerifyAuthenticationException();
-        
+
     }
 
     private List<String> extractRoles(ProceedingJoinPoint point) {
-        MethodSignature m = (MethodSignature)point.getSignature();
+        MethodSignature m = (MethodSignature) point.getSignature();
         Method method = m.getMethod();
         Entitlement e = method.getAnnotation(Entitlement.class);
         List<String> names = new ArrayList<String>();
@@ -75,14 +80,9 @@ public class EntitlementAspect {
         return names;
     }
 
-    public EntitlementAspect(SessionManager sessionManager) {
+    public EntitlementAspect(SessionManager sessionManager, AbstractRestSecLoader loader) {
         this.sessionManager = sessionManager;
-        this.entitlementDirectory = new HashMap<>();
-        List<String> list = new ArrayList<>();
-        list.add(Role.ADMIN.name());
-        list.add(Role.USER.name());
-        entitlementDirectory.put("4003348", list);
-        
+        this.entitlementDirectory = CacheBuilder.newBuilder().build(loader);
     }
 
 }
