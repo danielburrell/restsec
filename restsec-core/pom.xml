@@ -3,7 +3,7 @@
   <parent>
     <groupId>uk.co.solong</groupId>
     <artifactId>restsec</artifactId>
-    <version>0.0.2-SNAPSHOT</version>
+    <version>0.0.2</version>
   </parent>
   <artifactId>restsec-core</artifactId>
   <name>RestSec Core</name>
